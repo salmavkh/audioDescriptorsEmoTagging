@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 # Visualize features importances based on gain performances for HLD models
 
 # ─── Configuration ──────────────────────────────────────────────────────────────
-CSV_PATH   = './trained_models_lightgbm/features/hld/top_features_by_descriptor.csv'
-OUTPUT_DIR = './trained_models_lightgbm/features/hld/visualizations_top10'
+CSV_PATH   = './trained_models_lightgbm/hld_models/features/hld/top_features_by_descriptor.csv'
+OUTPUT_DIR = './trained_models_lightgbm/features/hld/visualizations_top10_2'
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ─── 1) Read the top‐10 CSV into a “long” DataFrame ─────────────────────────────

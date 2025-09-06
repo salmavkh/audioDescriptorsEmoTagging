@@ -26,16 +26,16 @@ build_dataset  = True
 # Uncomment one block at a time to train each model:
 
 # For Valence training:
-# va_file = './datasets/out_Valence_feature_importance.csv'
-# df_ratings_path = "./datasets/Emo-Soundscapes/Emo-Soundscapes-Ratings/Valence.csv"
-# model_output_name = "./trained_models_lightgbm/va_model/trained_valence_model_lightgbm.joblib"
-# print("--- Configuring for Valence Model Training ---")
+va_file = './datasets/out_Valence_feature_importance.csv'
+df_ratings_path = "./datasets/Emo-Soundscapes/Emo-Soundscapes-Ratings/Valence.csv"
+model_output_name = "./trained_models_lightgbm/va_model/trained_valence_model_lightgbm.joblib"
+print("--- Configuring for Valence Model Training ---")
 
 # # For Arousal training:
-va_file         = './datasets/out_Arousal_feature_importance.csv'
-df_ratings_path = "./datasets/Emo-Soundscapes/Emo-Soundscapes-Ratings/Arousal.csv"
-model_output_name = "./trained_models_lightgbm/va_model/trained_arousal_model_lightgbm.joblib"
-print("--- Configuring for Arousal Model Training ---")
+# va_file         = './datasets/out_Arousal_feature_importance.csv'
+# df_ratings_path = "./datasets/Emo-Soundscapes/Emo-Soundscapes-Ratings/Arousal.csv"
+# model_output_name = "./trained_models_lightgbm/va_model/trained_arousal_model_lightgbm_feature_normalized.joblib"
+# print("--- Configuring for Arousal Model Training ---")
 
 # !!! IMPORTANT: Create a new folder then put 600_Sounds and 613_MixedSounds folders here
 audioFolder = "./datasets/Emo-Soundscapes/Emo-Soundscapes-Audio/600Sounds_and_613MixedSounds"
@@ -181,16 +181,20 @@ lgbm_model = regr.named_steps['lgbm']
 gain_vals  = lgbm_model.booster_.feature_importance(importance_type='gain')
 importances = pd.Series(gain_vals, index=all_original_feature_names).sort_values(ascending=False)
 
+# Normalize to percentage of total gain
+total_gain = importances.sum()
+importances_perc = (importances / total_gain) * 100
+
 # print top N
 top_n = 10
-print(f"\nTop {top_n} features by gain:")
-print(importances.head(top_n))
+print(f"\nTop {top_n} features by % of total gain:")
+print(importances_perc.head(top_n))
 
-# bar‐plot of top N
+# bar‐plot of top N (percentages)
 plt.figure(figsize=(10,6))
-importances.head(top_n).plot(kind='bar')
+importances_perc.head(top_n).plot(kind='bar')
 plt.xticks(rotation=45, ha='right')
-plt.ylabel("Gain")
-plt.title(f"Top {top_n} Gain Importances")
+plt.ylabel("Importance (% of total gain)")
+plt.title(f"Top {top_n} Feature Importances (Normalized %) for Valence")
 plt.tight_layout()
 plt.show()

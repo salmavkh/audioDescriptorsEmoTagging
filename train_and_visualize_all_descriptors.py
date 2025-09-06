@@ -124,7 +124,7 @@ def load_data_for_descriptor(db_name, selected_descriptor):
 
 # NEW: early stopping callback for Optuna when R2 ≥ 0.8
 def stop_if_good(study, trial):
-    if trial.value is not None and trial.value >= 0.7:
+    if trial.value is not None and trial.value >= 0.9:
         print(f"▶️ Stopping early: trial#{trial.number} reached {trial.value:.3f}")
         study.stop()
 

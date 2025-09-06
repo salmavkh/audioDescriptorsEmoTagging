@@ -13,7 +13,7 @@ from va_analyzer import perform_descriptor_analysis
 # Path and prefix for output csv
 DATASETS_DIR = "./datasets/"
 #DATA_OUTPUT_PREFIX = "miniC_audio"
-DATA_OUTPUT_PREFIX = "predictions/va/new_audio"
+DATA_OUTPUT_PREFIX = "predictions/new_audio"
 
 # Path to the folder containing the new audio files you want to analyze
 # IMPORTANT: put  new .wav files here!

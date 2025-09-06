@@ -15,11 +15,9 @@ from emo_file_mapping import build_file_mapping
 from va_data_loader import load_vad_lexicon, load_descriptor_pairs
 
 # --- PATHS ---
-FILE_HLD_PATH = "./datasets/EmoSS_Ratings"
-FILE_AUDIO_PATH = "./datasets/Emo-Soundscapes/Emo-Soundscapes-Audio"
-
-FILE_VA_PATH = "./datasets/Emo-Soundscapes/Emo-Soundscapes-Ratings"
-SS_CORPUS_PATH = "./datasets/EmoSS_Ratings/ES_Corpus"
+FILE_AUDIO_PATH = "./datasets/HLD_corpus/"
+MTURK_CSV   = "./datasets/validation/inter_rater_agreement_0.3.csv"
+VA_PRED_CSV = "./datasets/validation/all_predicted_va.csv"
 VAD_LEXICON_DIR = "./datasets/NRC-VAD-Lexicon-v2.1/OneFilePerDimension"
 AROUSAL_LEXICON_PATH = os.path.join(VAD_LEXICON_DIR, "arousal-NRC-VAD-Lexicon-v2.1.txt")
 VALENCE_LEXICON_PATH = os.path.join(VAD_LEXICON_DIR, "valence-NRC-VAD-Lexicon-v2.1.txt")
@@ -27,7 +25,7 @@ DESCRIPTOR_PAIRS_PATH = "./datasets/descriptorPairs.txt"
 
 # Relative base path to audio directory
 # we don't know if mixed or not + we don't know the category
-AUDIO_BASE_PATH = os.path.join(FILE_AUDIO_PATH, '*', '*')
+AUDIO_BASE_PATH = FILE_AUDIO_PATH
 
 # Playback control
 current_filename = [""]
@@ -54,31 +52,38 @@ def play_audio(filename):
     except Exception as e:
         print(f"Playback error for {path}: {e}")
 
-def plot_error_against_score_map_opt_tk(root, hld_name, file_hld_path, file_va_path, descriptor_pair, name_to_number_map ):
-    try:
-        arousal_df = pd.read_csv(os.path.join(file_va_path, 'arousal.csv'), header=None, names=['audio_file_name_wav', 'arousal'])
-        valence_df = pd.read_csv(os.path.join(file_va_path, 'valence.csv'), header=None, names=['audio_file_name_wav', 'valence'])
-        hld_df = pd.read_csv(os.path.join(file_hld_path, f'{hld_name}.csv'))
-        hld_df.rename(columns={'File': 'file_number', 'Value': hld_name}, inplace=True)
-    except FileNotFoundError as e:
-        print(f"Error loading data for {hld_name}: {e}.")
-        return
+def plot_error_against_score_map_opt_tk(root, hld_name, descriptor_pair):
+    # === Replace original VA+HLD block with MTurk human ratings + VA preds ===
+    # 1) Load MTurk inter‑rater agreement
+    mturk_df = pd.read_csv(MTURK_CSV)
+    mturk_df = mturk_df[mturk_df['is_valid'].str.lower() == 'yes']
+    mturk_df['file'] = (
+        mturk_df['filename']
+        .str.replace('.mp3', '', regex=False)
+        .str.lower()
+    )
+    mturk_df = mturk_df[['file', 'descriptor', 'avg_rating']]
 
-    arousal_df['audio file name'] = arousal_df['audio_file_name_wav'].str.replace('.wav', '', regex=False)
-    valence_df['audio file name'] = valence_df['audio_file_name_wav'].str.replace('.wav', '', regex=False)
-    arousal_df['file_number'] = arousal_df['audio file name'].map(name_to_number_map)
-    valence_df['file_number'] = valence_df['audio file name'].map(name_to_number_map)
-    arousal_df.dropna(subset=['file_number'], inplace=True)
-    valence_df.dropna(subset=['file_number'], inplace=True)
-    arousal_df['file_number'] = arousal_df['file_number'].astype(int)
-    valence_df['file_number'] = valence_df['file_number'].astype(int)
-    hld_df['file_number'] = hld_df['file_number'].astype(int)
+    # 2) Load your predicted VA
+    va_df = pd.read_csv(VA_PRED_CSV)
+    va_df['file'] = (
+        va_df['file']
+        .str.replace('.wav', '', regex=False)
+        .str.lower()
+    )
+    va_df = va_df[['file', 'valence', 'arousal']]
 
-    va_df = pd.merge(arousal_df[['file_number', 'arousal', 'audio file name']], valence_df[['file_number', 'valence']], on='file_number')
-    merged_df = pd.merge(va_df, hld_df, on='file_number')
+    # 3) Merge for the current descriptor (hld_name)
+    desc = hld_name.lower()
+    ratings = mturk_df[mturk_df['descriptor'] == desc]
+    merged_df = pd.merge(va_df, ratings[['file', 'avg_rating']], on='file')
     if merged_df.empty:
         print(f"No data to plot for {hld_name}.")
         return
+
+    # 4) Rename avg_rating → hld_name for downstream code
+    merged_df.rename(columns={'avg_rating': hld_name}, inplace=True)
+    # === End replacement ===
 
     values_hld = merged_df[hld_name].values
     
@@ -220,7 +225,7 @@ def plot_error_against_score_map_opt_tk(root, hld_name, file_hld_path, file_va_p
     opt_button.pack(side=tk.LEFT, padx=10)
 
     # Store dot-to-file mapping
-    file_paths = merged_df['audio file name'].tolist()
+    file_paths = merged_df['file'].tolist()
 
     # Use event to get closest point
     hovered_index = [None]
@@ -266,25 +271,21 @@ if __name__ == '__main__':
     if not descriptor_pairs: exit("No descriptor pairs were loaded.")
     
     # --- Find all valid HLD files to plot ---
+    # Build valid_plots_info from the MTurk file’s descriptor column
+    mturk_df = pd.read_csv(MTURK_CSV)
+    mturk_df = mturk_df[mturk_df['is_valid'].str.lower() == 'yes']
+    unique_descs = mturk_df['descriptor'].str.lower().unique()
     valid_plots_info = []
-    print(f"\nSearching for HLD files in: {FILE_HLD_PATH}")
-    for filename in os.listdir(FILE_HLD_PATH):
-        if filename.lower().endswith('.csv'):
-            hld_name_original_case = os.path.splitext(filename)[0]
-            hld_name_lower = hld_name_original_case.lower()
-            
-            target_pair = next((p for p in descriptor_pairs if p['d1'] == hld_name_lower or p['d2'] == hld_name_lower), None)
-            
-            if target_pair:
-                valid_plots_info.append({'hld_name': hld_name_original_case, 'pair': target_pair})
-            else:
-                print(f"Warning: Could not find a matching descriptor pair for '{hld_name_lower}'. Skipping.")
-
+    for desc in unique_descs:
+        pair = next((p for p in descriptor_pairs if p['d1']==desc or p['d2']==desc), None)
+        if pair:
+            valid_plots_info.append({'hld_name': desc, 'pair': pair})
     if not valid_plots_info:
-        exit("No valid HLDs with matching descriptor pairs found.")
+        exit("No valid descriptors found in MTurk ratings.")
 
-    number_to_name_map = build_file_mapping(SS_CORPUS_PATH)
-    name_to_number_map = {v: k for k, v in number_to_name_map.items()}
+
+    # number_to_name_map = build_file_mapping(SS_CORPUS_PATH)
+    # name_to_number_map = {v: k for k, v in number_to_name_map.items()}
 
     root = tk.Tk()
     root.title("HLD vs VA Plot Viewer")
@@ -306,10 +307,7 @@ if __name__ == '__main__':
         plot_error_against_score_map_opt_tk(
             root=root,
             hld_name=plot_info['hld_name'],
-            file_hld_path=FILE_HLD_PATH,
-            file_va_path=FILE_VA_PATH,
-            descriptor_pair=plot_info['pair'],
-            name_to_number_map = name_to_number_map
+            descriptor_pair=plot_info['pair']
         )
         add_navigation_buttons()
 
